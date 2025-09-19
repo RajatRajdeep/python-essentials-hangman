@@ -1,26 +1,8 @@
-import os
-from typing import NamedTuple
-import enum
 from dataclasses import dataclass, field
-
-
-class GameConstants(NamedTuple):
-    name: str = "Hangman with 🐍"
-    lives: int = 5
-    life_symbol: str = "❤️"
-    screen_width: int = 80
-
-
-# TODO - 1.1: Ask yourself: Why namedtuple and not dict?
-# TODO - 1.2: How can we do better?
-GAME_CONSTANTS = GameConstants()
-
-
-class GAME_STATE(enum.StrEnum):
-    NOT_STARTED = "NOT_STARTED"
-    IN_PROGRESS = "IN_PROGRESS"
-    VICTORY = "VICTORY"
-    DEFEAT = "DEFEAT"
+import random
+from collections import deque, Counter
+from utils import clear_screen
+from constants import GAME_CONSTANTS, GAME_STATE, WordEntity
 
 
 @dataclass
@@ -28,17 +10,15 @@ class GameStatus:
     state: GAME_STATE = GAME_STATE.NOT_STARTED
     lives_remaining: int = GAME_CONSTANTS.lives
     masked_word: list[str] = field(default_factory=list)
-    # TODO - 2.1: Create a `target` to store the target word and hint
-    # TODO - 2.2: Create a collection `recent_guesses` to tracks the last three letters guessed by the player
+    target: WordEntity | None = None
+    recent_guesses: deque = field(default_factory=lambda: deque(maxlen=3))
 
 
 game_status = GameStatus()
 
 
 def render_game_screen():
-    # TODO - 3.1: How can we do better?
-    command = "clear" if os.name == "posix" else "cls"
-    os.system(command)
+    clear_screen()
 
     print("-" * GAME_CONSTANTS.screen_width)
     print(f"{GAME_CONSTANTS.name:^{GAME_CONSTANTS.screen_width}}")
@@ -47,12 +27,12 @@ def render_game_screen():
     )
     if game_status.state == GAME_STATE.IN_PROGRESS:
         print(f"{' '.join(game_status.masked_word)}")
-        print("<HINT> 💡")
-        print("Recent Guessed Letters: <Letters>")
+        print(f"{game_status.target.hint} 💡")
+        print(f"Recent Guessed Letters: {', '.join(game_status.recent_guesses)}")
     elif game_status.state == GAME_STATE.VICTORY:
-        print("🎉 You Won! You solved the word: <Target Word> 🎉")
+        print(f"🎉 You Won! You solved the word: {game_status.target.text} 🎉")
     elif game_status.state == GAME_STATE.DEFEAT:
-        print("💔 Game Over! The word was: <Target Word>")
+        print(f"💔 Game Over! The word was: {game_status.target.text}")
 
 
 def get_guessed_letter() -> str:
@@ -66,16 +46,8 @@ def get_guessed_letter() -> str:
             )
 
 
-def get_guess_letter():
-    # TODO - 5.1: Create a word bank
-    # TODO - 6.1: return a word randomly and hint associated with it
-    # Word Bank with Hints
-    # PYTHON, Not the snake, but you’ll definitely debug its bites
-    # ARRAY, If you’re lost, just index your way out!
-    # LOOP, Round and round we go, where it ends, nobody knows
-    # BINARY, It’s all 1s and 0s—unless there’s a typo in your logic
-    # SYNTAX, It’s like grammar... but mess it up, and the compiler screams
-    pass
+def get_guess_letter() -> WordEntity:
+    return random.choice(GAME_CONSTANTS.word_bank)
 
 
 def set_guess_letter(target_word: str, masked_word: list[str], letter: str) -> None:
@@ -86,17 +58,35 @@ def set_guess_letter(target_word: str, masked_word: list[str], letter: str) -> N
 
 
 def process_guess(guess: str) -> None:
-    # TODO - 7.1: Validate player guess and update game status
-    pass
+    target_counter = Counter(game_status.target.text)
+    guessed_counter = Counter(
+        [letter for letter in game_status.masked_word if letter != "_"]
+    )
+    remaining_counter = target_counter - guessed_counter
+
+    if remaining_counter[guess] > 0:
+        set_guess_letter(game_status.target.text, game_status.masked_word, guess)
+        guessed_counter[guess] += 1
+    else:
+        game_status.lives_remaining -= 1
+
+    game_status.recent_guesses.append(guess)
+    if target_counter == guessed_counter:
+        game_status.state = GAME_STATE.VICTORY
+    elif game_status.lives_remaining == 0:
+        game_status.state = GAME_STATE.DEFEAT
 
 
-def main():
-    # TODO - 4.1: How can we do better?
+def initiate_game():
     render_game_screen()
     input("Press a key to START the game...")
     game_status.state = GAME_STATE.IN_PROGRESS
     game_status.target = get_guess_letter()
-    game_status.masked_word = list("_" * len("<Target Word>"))
+    game_status.masked_word = list("_" * len(game_status.target.text))
+
+
+def main():
+    initiate_game()
 
     while game_status.state not in [GAME_STATE.VICTORY, GAME_STATE.DEFEAT]:
         render_game_screen()
